@@ -1,63 +1,87 @@
-const express = require("express");
-const mongoose = require("mongoose");;
-const ejs = require("ejs");
-const bcrypt = require("bcrypt");
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config()
+}
 
-const app = express();
+const express = require('express')
+const app = express()
+const bcrypt = require('bcrypt')
+const passport = require('passport')
+const flash = require('express-flash')
+const session = require('express-session')
+const methodOverride = require('method-override')
 
-const users = [];
+const initializePassport = require('./passport-config')
+initializePassport(
+  passport,
+  email => users.find(user => user.email === email),
+  id => users.find(user => user.id === id)
+)
 
-//DB config
-//const db = require("./config/keys").MongoURI;
-//connect to Mongo
-//mongoose.connect(db, {useNewUrlParser: true, useUnifiedTopology: true})
-//.then(() => console.log("MongDB Connected"))
-//.catch(err => console.log(err));
+const users = []
 
-//EJS
-app.set("view engine", "ejs");
+app.set('view-engine', 'ejs')
+app.use(express.urlencoded({ extended: false }))
+app.use(flash())
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false
+}))
+app.use(passport.initialize())
+app.use(passport.session())
+app.use(methodOverride('_method'))
 
-//middlewares
-app.use(express.urlencoded({extended: false}));
+app.get('/', checkAuthenticated, (req, res) => {
+  res.render('index.ejs', { name: req.user.name })
+})
 
-app.get("/", (rwq, res) => {
-    res.render("index", {name: "swetha"});
-});
+app.get('/login', checkNotAuthenticated, (req, res) => {
+  res.render('login.ejs')
+})
 
-app.get("/login", (req, res) => {
-    res.render("login");
-});
+app.post('/login', checkNotAuthenticated, passport.authenticate('local', {
+  successRedirect: '/',
+  failureRedirect: '/login',
+  failureFlash: true
+}))
 
-app.post("/register", (req, res) => {
+app.get('/register', checkNotAuthenticated, (req, res) => {
+  res.render('register.ejs')
+})
 
-});
+app.post('/register', checkNotAuthenticated, async (req, res) => {
+  try {
+    const hashedPassword = await bcrypt.hash(req.body.password, 10)
+    users.push({
+      id: Date.now().toString(),
+      name: req.body.name,
+      email: req.body.email,
+      password: hashedPassword
+    })
+    res.redirect('/login')
+  } catch {
+    res.redirect('/register')
+  }
+})
 
-app.get("/register", (req, res) => {
-    res.render("register");
-});
+app.delete('/logout', (req, res) => {
+  req.logOut()
+  res.redirect('/login')
+})
 
-app.post("/register", async(req, res) => {
-  try{
-      const hashedpassword = await bcrypt.hash(req.body.password, 10);
-      users.push({
-          id: Date.now().toString(),
-          name: req.body.name,
-          email: req.body.email,
-          password: hashedpassword
-      })
-      res.redirect("/login")
-    }
-    catch{
-        res.redirect("/register")
-    }
-    console.log(users);
+function checkAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) {
+    return next()
+  }
 
-});
+  res.redirect('/login')
+}
 
+function checkNotAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) {
+    return res.redirect('/')
+  }
+  next()
+}
 
-
-const PORT = process.env.PORT || 8000
-
-app.listen(PORT, () => {
-    console.log(`server started at port ${PORT}`)
-});
+app.listen(3000)
