@@ -16,8 +16,18 @@ mongoose.connect(db, {useNewUrlParser: true, useUnifiedTopology: true})
 app.set("view engine", "ejs");
 
 app.get("/", (rwq, res) => {
-    res.render("index", {name: "swetha"})
+    res.render("index", {name: "swetha"});
 });
+
+app.get("/login", (req, res) => {
+    res.render("login");
+});
+
+app.get("/register", (req, res) => {
+    res.render("register");
+});
+
+
 
 const PORT = process.env.PORT || 8000
 
